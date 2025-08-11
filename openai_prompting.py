@@ -1,12 +1,13 @@
 from typing import Any
-import pandas as pd
 import time
 import random
 from tqdm import tqdm
 from openai import OpenAI
+import pandas as pd
 import AUTH
 
 client = OpenAI(api_key=AUTH.OAI_API_KEY)
+model: str = 'gpt-3.5-turbo'  # gpt-3.5-turbo and gpt-4
 
 req_cols: list[str] = ['role', 'prompt']
 
@@ -30,7 +31,7 @@ def get_response(prompt: str) -> str:
     """Send prompt to OpenAI model and return the response."""
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # 'gpt-3.5-turbo' and 'gpt-4'
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )

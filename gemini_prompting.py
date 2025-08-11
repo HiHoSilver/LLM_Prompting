@@ -1,9 +1,9 @@
 from typing import Any
-import google.generativeai as genai
-import pandas as pd
 import time
 import random
 from tqdm import tqdm
+import google.generativeai as genai
+import pandas as pd
 import AUTH
 
 genai.configure(api_key=AUTH.GEM_API_KEY)
@@ -29,7 +29,6 @@ def load_data(file_path: str, required_columns: list[str]) -> pd.DataFrame | Non
 
 def get_response(prompt: str) -> Any:
     try:
-        model
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
