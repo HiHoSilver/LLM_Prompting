@@ -1,0 +1,12 @@
+*.xlsx
+*.csv
+*pptx
+*.json
+*.pyc
+*.db
+*.db.dat
+*.db.dir
+*.db.bak
+__pycache__/
+archive/
+AUTH.py
