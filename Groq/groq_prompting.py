@@ -1,38 +1,39 @@
-from typing import Any
 import time
 import random
+from typing import Any
 from tqdm import tqdm
 from groq import Groq
 import pandas as pd
 from config import GROQ_CONFIG
+from utils import parse_addresses
 
 client = Groq(api_key=GROQ_CONFIG.api_key)
 req_cols: list[str] = ['prompt']
 
 def load_data(filepath: str, required_columns: list[str], sheetname: str=None) -> pd.DataFrame | None:
     try:
-        df = pd.read_excel(filepath, sheet_name=sheetname) if sheetname else pd.read_excel(filepath)
-        missing = set(required_columns) - set(df.columns)
+        df: pd.DataFrame = pd.read_excel(filepath, sheet_name=sheetname) if sheetname else pd.read_excel(filepath)
+        missing: set[str] = set(required_columns) - set(df.columns)
         if missing:
             print(f"'{filepath}' is missing required columns: {missing}")
-            return None
+            return
         print(f"'{filepath}' loaded successfully...")
         return df
     except FileNotFoundError:
         print(f"Error: File '{filepath}' not found.")
+        return
     except Exception as e:
         print(f"Unexpected error loading '{filepath}': {e}")
-        return None
+        return
 
 def get_response(prompt: str, max_retries: int = 6) -> str:
     """
     Calls Groq with exponential backoff + jitter.
     Retries on transient server errors.
     """
-
     for attempt in range(1, max_retries + 1):
         try:
-            completion = client.chat.completions.create(
+            completion: Any = client.chat.completions.create(
                 model=GROQ_CONFIG.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0
@@ -47,21 +48,21 @@ def get_response(prompt: str, max_retries: int = 6) -> str:
 
     return "Error: Maximum retries exceeded"
 
-def throttle():
+def throttle() -> None:
     time.sleep(random.uniform(0.3, 0.8))
 
 def process_prompts(df: pd.DataFrame) -> pd.DataFrame | None:
     if df is None or df.empty:
         print("Input file is empty or invalid")
-        return None
+        return
 
     try:
-        df_unique = df.drop_duplicates()
-        duplicates = len(df) - len(df_unique)
+        df_unique: pd.DataFrame = df.drop_duplicates()
+        duplicates: int = len(df) - len(df_unique)
         if duplicates:
             print(f"{duplicates} duplicate prompts found.")
 
-        responses = []
+        responses: list[str] = []
 
         for row in tqdm(df_unique.itertuples(), total=len(df_unique), desc="Generating responses"):
             # Optional cooldown for very large batches
@@ -69,8 +70,8 @@ def process_prompts(df: pd.DataFrame) -> pd.DataFrame | None:
                 print("Cooling down for 5 seconds...")
                 time.sleep(5)
 
-            parts = [GROQ_CONFIG.role, GROQ_CONFIG.base_prompt, row.prompt]
-            prompt = ". ".join(p for p in parts if p)
+            parts: list[str] = [GROQ_CONFIG.role, GROQ_CONFIG.base_prompt, row.prompt]
+            prompt: str = ". ".join(p for p in parts if p)
 
             response = get_response(prompt)
             responses.append(response)
@@ -99,6 +100,9 @@ def main() -> None:
     if df_processed is None:
         print("Processing failed. Exiting.")
         return
+
+    if GROQ_CONFIG.parse_add_flag:
+        parse_addresses(df_processed)
 
     df_processed.to_excel(GROQ_CONFIG.output_filepath, index=False)
     print(f"Successfully processed {len(df)} rows")
