@@ -6,11 +6,8 @@ from groq import Groq
 import pandas as pd
 from config import GROQ_CONFIG
 
-# Initialize Groq client
 client = Groq(api_key=GROQ_CONFIG.api_key)
-
 req_cols: list[str] = ['prompt']
-
 
 def load_data(filepath: str, required_columns: list[str], sheetname: str=None) -> pd.DataFrame | None:
     try:
@@ -27,7 +24,6 @@ def load_data(filepath: str, required_columns: list[str], sheetname: str=None) -
         print(f"Unexpected error loading '{filepath}': {e}")
         return None
 
-
 def get_response(prompt: str, max_retries: int = 6) -> str:
     """
     Calls Groq with exponential backoff + jitter.
@@ -37,11 +33,11 @@ def get_response(prompt: str, max_retries: int = 6) -> str:
     for attempt in range(1, max_retries + 1):
         try:
             completion = client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+                model=GROQ_CONFIG.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0
             )
-            return completion.choices[0].message["content"]
+            return completion.choices[0].message.content
 
         except Exception as e:
             # Groq uses generic exceptions; retry on anything transient
@@ -51,11 +47,8 @@ def get_response(prompt: str, max_retries: int = 6) -> str:
 
     return "Error: Maximum retries exceeded"
 
-
 def throttle():
-    # Groq is fast and tolerant, but a small delay helps smooth large batches
     time.sleep(random.uniform(0.3, 0.8))
-
 
 def process_prompts(df: pd.DataFrame) -> pd.DataFrame | None:
     if df is None or df.empty:
@@ -70,9 +63,9 @@ def process_prompts(df: pd.DataFrame) -> pd.DataFrame | None:
 
         responses = []
 
-        for idx, row in tqdm(df_unique.iterrows(), total=len(df_unique), desc="Generating responses"):
+        for row in tqdm(df_unique.itertuples(), total=len(df_unique), desc="Generating responses"):
             # Optional cooldown for very large batches
-            if idx % 50 == 0 and idx > 0:
+            if row.Index % 50 == 0 and row.Index > 0:
                 print("Cooling down for 5 seconds...")
                 time.sleep(5)
 
@@ -95,7 +88,6 @@ def process_prompts(df: pd.DataFrame) -> pd.DataFrame | None:
     except Exception as e:
         print(f"Fatal error during response generation: {e}")
         raise
-
 
 def main() -> None:
     df = load_data(GROQ_CONFIG.input_filepath, req_cols)
