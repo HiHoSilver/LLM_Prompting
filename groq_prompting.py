@@ -4,8 +4,9 @@ from typing import Any
 from tqdm import tqdm
 from groq import Groq
 import pandas as pd
-from config import GROQ_CONFIG
-from utils import parse_addresses
+from Groq import GROQ_CONFIG
+from utils.address_parsing import parse_addresses
+from utils.timing import Timer
 
 client = Groq(api_key=GROQ_CONFIG.api_key)
 req_cols: list[str] = ['prompt']
@@ -40,8 +41,8 @@ def get_response(prompt: str, max_retries: int = 6) -> str:
             )
             return completion.choices[0].message.content
 
+        # Groq uses generic exceptions; retry on anything transient
         except Exception as e:
-            # Groq uses generic exceptions; retry on anything transient
             wait = (2 ** attempt) + random.uniform(0, 2)
             print(f"Groq error: {e}. Retrying in {wait:.2f} seconds...")
             time.sleep(wait)
@@ -63,19 +64,33 @@ def process_prompts(df: pd.DataFrame) -> pd.DataFrame | None:
             print(f"{duplicates} duplicate prompts found.")
 
         responses: list[str] = []
+        timer = Timer()
+        total_rows = len(df_unique)
 
-        for row in tqdm(df_unique.itertuples(), total=len(df_unique), desc="Generating responses"):
-            # Optional cooldown for very large batches
+        for row in tqdm(df_unique.itertuples(), total=total_rows, desc="Generating responses"):
             if row.Index % 50 == 0 and row.Index > 0:
                 print("Cooling down for 5 seconds...")
                 time.sleep(5)
 
-            parts: list[str] = [GROQ_CONFIG.role, GROQ_CONFIG.base_prompt, row.prompt]
-            prompt: str = ". ".join(p for p in parts if p)
+            parts = [GROQ_CONFIG.role, GROQ_CONFIG.base_prompt, row.prompt]
+            prompt = ". ".join(p for p in parts if p)
 
             response = get_response(prompt)
             responses.append(response)
             throttle()
+
+            if row.Index % 2 == 0 and row.Index > 0:
+                elapsed = timer.elapsed()
+                avg_per_row = elapsed / row.Index
+                remaining = total_rows - row.Index
+                eta_seconds = avg_per_row * remaining
+
+                print(
+                    f"Elapsed: {timer.format(elapsed)} | "
+                    f"ETA: {timer.format(eta_seconds)} remaining"
+                )
+
+            print(f"Total processing time: {timer.format(timer.elapsed())}")
 
         df_unique["response"] = responses
 
@@ -91,6 +106,8 @@ def process_prompts(df: pd.DataFrame) -> pd.DataFrame | None:
         raise
 
 def main() -> None:
+    overall = Timer()
+
     df = load_data(GROQ_CONFIG.input_filepath, req_cols)
     if df is None:
         print("Failed to load input file. Exiting.")
@@ -107,7 +124,8 @@ def main() -> None:
     df_processed.to_excel(GROQ_CONFIG.output_filepath, index=False)
     print(f"Successfully processed {len(df)} rows")
     print(f"Output saved to {GROQ_CONFIG.output_filepath}")
-
+    print(f"Total runtime: {overall.elapsed()}")
+    
 
 if __name__ == "__main__":
     main()
